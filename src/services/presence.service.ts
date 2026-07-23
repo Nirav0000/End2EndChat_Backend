@@ -3,7 +3,7 @@ import { User } from '../models/User.js';
 
 export class PresenceService {
   static async setOnline(userId: string) {
-    if (!isRedisConnected()) return;
+    if (!isRedisConnected() || !redis) return;
     try {
       await redis.set(`presence:${userId}`, 'online');
     } catch (error) {
@@ -13,7 +13,7 @@ export class PresenceService {
 
   static async setOffline(userId: string) {
     try {
-      if (isRedisConnected()) {
+      if (isRedisConnected() && redis) {
         await redis.del(`presence:${userId}`);
       }
       await User.findByIdAndUpdate(userId, { lastSeen: new Date() });
@@ -23,7 +23,7 @@ export class PresenceService {
   }
 
   static async getOnlineStatus(userId: string) {
-    if (!isRedisConnected()) return false;
+    if (!isRedisConnected() || !redis) return false;
     try {
       const val = await redis.get(`presence:${userId}`);
       return val === 'online';
@@ -33,7 +33,7 @@ export class PresenceService {
   }
 
   static async getOnlineStatuses(userIds: string[]) {
-    if (!isRedisConnected() || userIds.length === 0) return {};
+    if (!isRedisConnected() || !redis || userIds.length === 0) return {};
     try {
       const pipeline = redis.pipeline();
       userIds.forEach(id => pipeline.get(`presence:${id}`));
@@ -50,3 +50,4 @@ export class PresenceService {
     }
   }
 }
+

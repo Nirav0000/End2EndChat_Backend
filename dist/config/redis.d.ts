@@ -1,4 +1,5 @@
 import { Redis } from 'ioredis';
-export declare const redis: Redis;
+declare let redis: Redis | null;
+export { redis };
 export declare const isRedisConnected: () => boolean;
 //# sourceMappingURL=redis.d.ts.map

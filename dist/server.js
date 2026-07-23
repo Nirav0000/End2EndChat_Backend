@@ -73,13 +73,24 @@ app.set('io', io);
 const startServer = async () => {
     try {
         await connectDB();
-        await initMinio();
-        await MessageExpirationService.expireDueMessages(io);
+        try {
+            await initMinio();
+        }
+        catch (minioError) {
+            console.warn('MinIO initialization failed, file uploads will be unavailable:', minioError);
+        }
+        try {
+            await MessageExpirationService.expireDueMessages(io);
+        }
+        catch (expError) {
+            console.warn('Initial message expiration check failed:', expError);
+        }
         setInterval(() => {
             MessageExpirationService.expireDueMessages(io).catch(error => console.error('Message expiration failed:', error));
         }, 60 * 1000);
-        httpServer.listen(env.PORT, () => {
-            console.log(`Server running on port ${env.PORT}`);
+        const port = parseInt(env.PORT, 10);
+        httpServer.listen(port, '0.0.0.0', () => {
+            console.log(`Server running on port ${port}`);
         });
     }
     catch (error) {

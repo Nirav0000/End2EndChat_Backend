@@ -10,12 +10,12 @@ const envSchema = z.object({
   MONGODB_URI: z.string(),
   JWT_ACCESS_SECRET: z.string(),
   JWT_REFRESH_SECRET: z.string(),
-  REDIS_URL: z.string(),
-  MINIO_ENDPOINT: z.string(),
-  MINIO_PORT: z.string().transform(Number),
-  MINIO_ACCESS_KEY: z.string(),
-  MINIO_SECRET_KEY: z.string(),
-  MINIO_BUCKET: z.string(),
+  REDIS_URL: z.string().optional().default(''),
+  MINIO_ENDPOINT: z.string().optional().default('localhost'),
+  MINIO_PORT: z.string().transform(Number).optional().default('9000'),
+  MINIO_ACCESS_KEY: z.string().optional().default(''),
+  MINIO_SECRET_KEY: z.string().optional().default(''),
+  MINIO_BUCKET: z.string().optional().default('chat-files'),
   MINIO_USE_SSL: z.string().transform((val) => val === 'true').default('false'),
 });
 
