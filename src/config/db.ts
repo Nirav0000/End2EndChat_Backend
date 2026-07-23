@@ -20,7 +20,9 @@ export const connectDB = async () => {
 
   while (retries < maxRetries) {
     try {
-      await mongoose.connect(env.MONGODB_URI);
+      await mongoose.connect(env.MONGODB_URI,{
+        tls:true,
+      });
       return;
     } catch (error) {
       retries++;
