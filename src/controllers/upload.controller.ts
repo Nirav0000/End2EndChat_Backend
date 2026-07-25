@@ -1,58 +1,61 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
 import { UploadService } from '../services/upload.service.js';
 
 export class UploadController {
-  static async directUpload(req: AuthRequest, res: Response) {
-    try {
-      const { filename, contentType, base64 } = req.body;
-      if (!base64 || !filename) {
-        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Missing file content' } });
-      }
-
-      const result = await UploadService.uploadDirect(req.userId!, filename, contentType, base64);
-      
-      const headerProto = req.headers['x-forwarded-proto'];
-      const protocol = (Array.isArray(headerProto) ? headerProto[0] : headerProto) || req.protocol;
-      
-      const headerHost = req.headers['x-forwarded-host'];
-      const host = (Array.isArray(headerHost) ? headerHost[0] : headerHost) || req.get('host');
-      
-      const url = `${protocol}://${host}/api/uploads/file/${result.key}`;
-
-      res.json({ url, key: result.key });
-    } catch (err: any) {
-      console.error('Error in directUpload:', err);
-      res.status(500).json({ error: { code: 'SERVER_ERROR', message: err.message || 'Upload failed' } });
-    }
-  }
-
-  static async serveFile(req: Request, res: Response) {
-    try {
-      const targetId = String(req.params.id || '');
-      const media = await UploadService.getMediaById(targetId);
-      
-      if (!media) {
-        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'File not found' } });
-      }
-
-      res.setHeader('Content-Type', media.contentType || 'application/octet-stream');
-      res.setHeader('Content-Length', media.size);
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      
-      return res.send(media.data);
-    } catch (err: any) {
-      console.error('Error serving file:', err);
-      res.status(500).json({ error: { code: 'SERVER_ERROR', message: 'Failed to serve file' } });
-    }
-  }
-
   static async getPresignedUrl(req: AuthRequest, res: Response) {
-    return UploadController.directUpload(req, res);
+    try {
+      const { filename, contentType } = req.body;
+      const data = await UploadService.generatePresignedPutUrl(req.userId!, filename, contentType);
+      res.json(data);
+    } catch (err) {
+      const backendUrl = process.env.RENDER_EXTERNAL_URL || 'https://end2endchat-backend.onrender.com';
+      res.json({
+        url: `${backendUrl}/api/uploads/direct`,
+        isDirect: true,
+        key: ''
+      });
+    }
+  }
+
+  static async uploadDirect(req: AuthRequest, res: Response) {
+    try {
+      const rawName = (req.headers['x-filename'] as string) || 'file.bin';
+      const filename = decodeURIComponent(rawName);
+      const contentType = (req.headers['content-type'] as string) || 'application/octet-stream';
+      const buffer = req.body as Buffer;
+
+      if (!buffer || buffer.length === 0) {
+        return res.status(400).json({ error: 'No file content received' });
+      }
+
+      const { key } = await UploadService.saveFileDirect(req.userId!, filename, contentType, buffer);
+      const url = await UploadService.generatePresignedGetUrl(key);
+      res.json({ key, url });
+    } catch (err: any) {
+      console.error('Direct upload error:', err);
+      res.status(500).json({ error: err.message || 'Upload failed' });
+    }
   }
 
   static async getFile(req: AuthRequest, res: Response) {
-    const key = String(req.query.key || '');
-    return res.json({ url: key });
+    try {
+      const key = req.query.key as string;
+      if (!key) {
+        return res.status(400).json({ error: 'Key parameter required' });
+      }
+
+      if (key.startsWith('gridfs:')) {
+        const { stream, contentType } = await UploadService.getFileStream(key);
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return stream.pipe(res);
+      }
+
+      const url = await UploadService.generatePresignedGetUrl(key);
+      res.json({ url });
+    } catch (err: any) {
+      res.status(404).json({ error: err.message || 'File not found' });
+    }
   }
 }
