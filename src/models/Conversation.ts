@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
-export type RetentionDuration = '1d' | '3d' | '7d' | '30d' | 'never';
+export type RetentionDuration = 'after_read' | '1d' | '3d' | '7d' | '30d' | 'never';
 
 export interface IMessageRetentionSetting {
   userId: mongoose.Types.ObjectId;
@@ -50,12 +50,12 @@ const conversationSchema = new Schema<IConversation>({
   hiddenBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   messageRetention: [{
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    duration: { type: String, enum: ['1d', '3d', '7d', '30d', 'never'], required: true },
+    duration: { type: String, enum: ['after_read', '1d', '3d', '7d', '30d', 'never'], required: true },
     deleteFromDatabase: { type: Boolean, default: false },
     configuredAt: { type: Date, default: Date.now }
   }],
   disappearingMessages: {
-    duration: { type: String, enum: ['1d', '3d', '7d', '30d', 'never'] },
+    duration: { type: String, enum: ['after_read', '1d', '3d', '7d', '30d', 'never'] },
     enabledAt: { type: Date },
     enabledBy: { type: Schema.Types.ObjectId, ref: 'User' }
   }

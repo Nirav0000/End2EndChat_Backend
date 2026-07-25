@@ -2,7 +2,7 @@ import { Conversation, type RetentionDuration } from '../models/Conversation.js'
 import mongoose from 'mongoose';
 
 export class ConversationService {
-  static readonly retentionMs: Record<Exclude<RetentionDuration, 'never'>, number> = {
+  static readonly retentionMs: Record<'1d' | '3d' | '7d' | '30d', number> = {
     '1d': 24 * 60 * 60 * 1000,
     '3d': 3 * 24 * 60 * 60 * 1000,
     '7d': 7 * 24 * 60 * 60 * 1000,
@@ -138,49 +138,50 @@ export class ConversationService {
     const { Message } = await import('../models/Message.js');
     const { retentionMs } = await import('./message.service.js');
 
-    if (duration === 'never') {
+    if (duration === 'never' || duration === 'after_read') {
       await Message.updateMany(
         { conversationId },
         { $set: { expiresFor: [] }, $unset: { expiresAt: 1 } }
       );
     } else {
-      const durMs = retentionMs[duration];
-      const allMessages = await Message.find({ conversationId }).lean();
-      
-      const expiredIds: mongoose.Types.ObjectId[] = [];
-      const bulkOps: any[] = [];
+      const durMs = retentionMs[duration as '1d' | '3d' | '7d' | '30d'];
+      if (durMs) {
+        const allMessages = await Message.find({ conversationId }).lean();
+        
+        const expiredIds: mongoose.Types.ObjectId[] = [];
+        const bulkOps: any[] = [];
 
-      for (const msg of allMessages) {
-        const expiresAt = new Date(msg.createdAt.getTime() + durMs);
-        if (expiresAt <= now) {
-          expiredIds.push(msg._id as mongoose.Types.ObjectId);
-        } else {
-          bulkOps.push({
-            updateOne: {
-              filter: { _id: msg._id },
-              update: { $set: { expiresAt, expiresFor: [] } }
-            }
-          });
-        }
-      }
-
-      if (bulkOps.length > 0) {
-        await Message.bulkWrite(bulkOps);
-      }
-
-      if (expiredIds.length > 0) {
-        await Message.deleteMany({ _id: { $in: expiredIds } });
-
-        const expiredStrIds = expiredIds.map(id => id.toString());
-        if (io) {
-          io.to(`conv:${conversationId}`).emit('messages:expired', { messageIds: expiredStrIds });
+        for (const msg of allMessages) {
+          const expiresAt = new Date(msg.createdAt.getTime() + durMs);
+          if (expiresAt <= now) {
+            expiredIds.push(msg._id as mongoose.Types.ObjectId);
+          } else {
+            bulkOps.push({
+              updateOne: {
+                filter: { _id: msg._id },
+                update: { $set: { expiresAt, expiresFor: [] } }
+              }
+            });
+          }
         }
 
-        if (conv.lastMessage && expiredStrIds.includes(conv.lastMessage.toString())) {
-          const newest = await Message.findOne({ conversationId }).sort({ createdAt: -1 }).lean();
-          conv.lastMessage = newest ? (newest._id as mongoose.Types.ObjectId) : undefined;
+        if (bulkOps.length > 0) {
+          await Message.bulkWrite(bulkOps);
+        if (expiredIds.length > 0) {
+          await Message.deleteMany({ _id: { $in: expiredIds } });
+
+          const expiredStrIds = expiredIds.map(id => id.toString());
+          if (io) {
+            io.to(`conv:${conversationId}`).emit('messages:expired', { messageIds: expiredStrIds });
+          }
+
+          if (conv.lastMessage && expiredStrIds.includes(conv.lastMessage.toString())) {
+            const newest = await Message.findOne({ conversationId }).sort({ createdAt: -1 }).lean();
+            conv.lastMessage = newest ? (newest._id as mongoose.Types.ObjectId) : undefined;
+          }
         }
       }
+    }
     }
 
     await conv.save();

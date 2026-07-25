@@ -33,9 +33,10 @@ export class MessageService {
 
     const now = new Date();
     const timer = conv.disappearingMessages;
-    const expiresAt = timer && timer.duration !== 'never'
-      ? new Date(now.getTime() + retentionMs[timer.duration as keyof typeof retentionMs])
+    const durMs = timer?.duration && timer.duration in retentionMs 
+      ? retentionMs[timer.duration as keyof typeof retentionMs] 
       : undefined;
+    const expiresAt = durMs ? new Date(now.getTime() + durMs) : undefined;
 
     const message = new Message({
       conversationId,
@@ -122,10 +123,48 @@ export class MessageService {
   }
 
   static async markRead(messageIds: string[], userId: string) {
-    return Message.updateMany(
+    const result = await Message.updateMany(
       { _id: { $in: messageIds }, senderId: { $ne: userId } },
       { $addToSet: { readBy: userId } }
     );
+
+    try {
+      const messages = await Message.find({ _id: { $in: messageIds } }).select('_id conversationId readBy senderId').lean();
+      const expiredIds: string[] = [];
+      const convCache = new Map<string, any>();
+
+      for (const msg of messages) {
+        const convId = msg.conversationId.toString();
+        if (!convCache.has(convId)) {
+          const conv = await Conversation.findById(convId).select('participants disappearingMessages').lean();
+          convCache.set(convId, conv);
+        }
+        const conv = convCache.get(convId);
+        if (conv?.disappearingMessages?.duration === 'after_read') {
+          const targetReadCount = conv.participants.length > 1 ? conv.participants.length - 1 : 1;
+          const readCount = msg.readBy ? msg.readBy.length : 0;
+          if (readCount >= targetReadCount) {
+            expiredIds.push(msg._id.toString());
+          }
+        }
+      }
+
+      if (expiredIds.length > 0) {
+        await Message.deleteMany({ _id: { $in: expiredIds } });
+        const io = (global as any).io;
+        if (io) {
+          messages.forEach(m => {
+            if (expiredIds.includes(m._id.toString())) {
+              io.to(`conv:${m.conversationId.toString()}`).emit('messages:expired', { messageIds: [m._id.toString()] });
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error in markRead after_read expiration:', err);
+    }
+
+    return result;
   }
 
   static async addReaction(messageId: string, userId: string, emoji: string) {

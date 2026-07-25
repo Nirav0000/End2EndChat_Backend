@@ -36,7 +36,7 @@ router.put('/:id/favorite', ConversationController.favoriteConversation);
 router.put('/:id/mute', ConversationController.muteConversation);
 const retentionSchema = z.object({
   body: z.object({
-    duration: z.enum(['1d', '3d', '7d', '30d', 'never']),
+    duration: z.enum(['after_read', '1d', '3d', '7d', '30d', 'never']),
   })
 });
 router.put('/:id/message-retention', validate(retentionSchema), ConversationController.updateMessageRetention);
