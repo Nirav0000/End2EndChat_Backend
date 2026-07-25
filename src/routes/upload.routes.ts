@@ -1,22 +1,13 @@
 import { Router } from 'express';
 import { UploadController } from '../controllers/upload.controller.js';
 import { authenticate } from '../middleware/auth.js';
-import { validate } from '../middleware/validate.js';
-import { z } from 'zod';
 
 const router = Router();
 
-router.use(authenticate);
+// Public route to view/download media files directly in <img>, <audio>, <video>, <a> tags
+router.get('/file/:id', UploadController.serveFile);
 
-router.post('/presign', validate(z.object({
-  body: z.object({
-    filename: z.string(),
-    contentType: z.string(),
-  })
-})), UploadController.getPresignedUrl);
-
-router.get('/files', validate(z.object({
-  query: z.object({ key: z.string() })
-})), UploadController.getFile);
+// Authenticated upload endpoint
+router.post('/direct', authenticate, UploadController.directUpload);
 
 export default router;

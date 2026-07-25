@@ -1,23 +1,35 @@
-import { minioClient } from '../config/minio.js';
-import { env } from '../config/env.js';
-import crypto from 'crypto';
+import { Media } from '../models/Media.js';
 
 export class UploadService {
-  static async generatePresignedPutUrl(userId: string, filename: string, contentType: string) {
-    const ext = filename.split('.').pop();
-    // basic path traversal prevention by creating our own random key
-    const uniqueId = crypto.randomBytes(16).toString('hex');
-    const key = `uploads/${userId}/${uniqueId}.${ext}`;
+  static async uploadDirect(userId: string, filename: string, contentType: string, base64Data: string) {
+    const buffer = Buffer.from(base64Data, 'base64');
     
-    const url = await minioClient.presignedPutObject(env.MINIO_BUCKET, key, 60 * 5); // 5 mins
-    return { url, key };
+    const media = new Media({
+      filename,
+      contentType: contentType || 'application/octet-stream',
+      data: buffer,
+      size: buffer.length,
+      uploaderId: userId
+    });
+    
+    await media.save();
+    
+    return {
+      key: media._id.toString(),
+      filename,
+      contentType
+    };
   }
 
-  static async generatePresignedGetUrl(key: string) {
-    // Ensure the key strictly belongs to uploads/ directory
-    if (!key.startsWith('uploads/') || key.includes('..')) {
-      throw { name: 'ValidationError', message: 'Invalid file key' };
+  static async getMediaById(id: string) {
+    if (!id || id.length !== 24) return null;
+    return Media.findById(id).lean();
+  }
+
+  static async generatePresignedGetUrl(keyOrUrl: string) {
+    if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
+      return keyOrUrl;
     }
-    return minioClient.presignedGetObject(env.MINIO_BUCKET, key, 60 * 60 * 24); // 24 hours
+    return keyOrUrl;
   }
 }
