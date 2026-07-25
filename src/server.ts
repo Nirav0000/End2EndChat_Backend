@@ -44,7 +44,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Access-Control-Request-Private-Network'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Filename', 'x-filename', 'Access-Control-Request-Private-Network', '*'],
 };
 
 app.use((req, res, next) => {
@@ -53,7 +53,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Access-Control-Request-Private-Network');
+    res.setHeader('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type, Authorization, X-Requested-With, X-Filename, x-filename, Access-Control-Request-Private-Network');
     return res.sendStatus(204);
   }
   next();
