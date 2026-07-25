@@ -5,8 +5,17 @@ import { env } from '../config/env.js';
 export class AuthController {
   static async register(req: Request, res: Response) {
     const { name, email, password } = req.body;
-    const user = await AuthService.register(name, email, password);
-    res.status(201).json(user);
+    const { user, accessToken, refreshToken } = await AuthService.register(name, email, password);
+    
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/api/auth',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    res.status(201).json({ user, accessToken });
   }
 
   static async login(req: Request, res: Response) {

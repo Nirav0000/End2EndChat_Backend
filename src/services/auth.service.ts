@@ -9,9 +9,14 @@ export class AuthService {
     const user = new User({ name, email, passwordHash, refreshTokenVersion: 0 });
     await user.save();
     
-    const userObj = user.toObject();
-    delete (userObj as any).passwordHash;
-    return userObj;
+    const accessToken = this.generateAccessToken(user.id);
+    const refreshToken = this.generateRefreshToken(user.id, user.refreshTokenVersion);
+
+    return {
+      user: { id: user.id, name: user.name, email: user.email },
+      accessToken,
+      refreshToken
+    };
   }
 
   static async login(email: string, password: string) {
