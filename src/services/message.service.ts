@@ -185,7 +185,12 @@ export class MessageService {
   }
 
   static async editMessage(messageId: string, userId: string, newText: string) {
-    const msg = await Message.findOne({ _id: messageId, senderId: userId });
+    const isObjId = mongoose.Types.ObjectId.isValid(messageId);
+    const query = isObjId 
+      ? { _id: messageId, senderId: userId }
+      : { id: messageId, senderId: userId };
+
+    const msg = await Message.findOne(query);
     if (!msg || msg.type !== 'text') {
       throw { name: 'ValidationError', message: 'Cannot edit this message' };
     }

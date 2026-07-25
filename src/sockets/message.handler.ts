@@ -55,12 +55,24 @@ export const setupMessageHandlers = (io: Server, socket: Socket) => {
   socket.on('message:edit', async (data) => {
     try {
       const msg = await MessageService.editMessage(data.messageId, userId, data.content);
-      io.to(`conv:${data.conversationId}`).emit('message:update', {
+      const updatePayload = {
         messageIds: [data.messageId],
         content: msg.content,
         edited: true,
         editedAt: msg.editedAt
-      });
+      };
+
+      io.to(`conv:${data.conversationId}`).emit('message:update', updatePayload);
+
+      const conv = await Conversation.findById(data.conversationId).select('participants lastMessage').lean();
+      if (conv && Array.isArray(conv.participants)) {
+        conv.participants.forEach((pId: any) => {
+          const pStr = pId.toString();
+          if (pStr !== userId) {
+            io.to(`user:${pStr}`).emit('message:update', updatePayload);
+          }
+        });
+      }
     } catch (err) {
       console.error('Error editing message:', err);
     }
