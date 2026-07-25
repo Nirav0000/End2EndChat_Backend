@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { MessageService } from '../services/message.service.js';
+import { Conversation } from '../models/Conversation.js';
 
 export const setupMessageHandlers = (io: Server, socket: Socket) => {
   const userId = socket.data.userId!;
@@ -7,7 +8,18 @@ export const setupMessageHandlers = (io: Server, socket: Socket) => {
   socket.on('message:send', async (data) => {
     try {
       const msg = await MessageService.sendMessage(data.conversationId, userId, data);
+      
       io.to(`conv:${data.conversationId}`).emit('message:new', msg);
+
+      const conv = await Conversation.findById(data.conversationId).select('participants').lean();
+      if (conv && Array.isArray(conv.participants)) {
+        conv.participants.forEach((pId: any) => {
+          const pStr = pId.toString();
+          if (pStr !== userId) {
+            io.to(`user:${pStr}`).emit('message:new', msg);
+          }
+        });
+      }
     } catch (err) {
       console.error('Error sending message:', err);
     }
