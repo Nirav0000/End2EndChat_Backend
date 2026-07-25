@@ -51,4 +51,47 @@ export const setupMessageHandlers = (io: Server, socket: Socket) => {
       console.error(err);
     }
   });
+
+  socket.on('message:edit', async (data) => {
+    try {
+      const msg = await MessageService.editMessage(data.messageId, userId, data.content);
+      io.to(`conv:${data.conversationId}`).emit('message:update', {
+        messageIds: [data.messageId],
+        content: msg.content,
+        edited: true,
+        editedAt: msg.editedAt
+      });
+    } catch (err) {
+      console.error('Error editing message:', err);
+    }
+  });
+
+  socket.on('message:delete', async (data) => {
+    try {
+      const rawIds = data.messageIds || data.messageId;
+      const messageIds: string[] = Array.isArray(rawIds) ? rawIds : [rawIds];
+      const forEveryone = !!data.forEveryone;
+      const processedIds: string[] = [];
+
+      for (const msgId of messageIds) {
+        if (!msgId) continue;
+        try {
+          await MessageService.deleteMessage(msgId, userId, forEveryone);
+          processedIds.push(msgId);
+        } catch (e) {
+          console.error(`Failed to delete message ${msgId}:`, e);
+        }
+      }
+
+      if (processedIds.length > 0) {
+        if (forEveryone) {
+          io.to(`conv:${data.conversationId}`).emit('messages:expired', { messageIds: processedIds });
+        } else {
+          socket.emit('messages:expired', { messageIds: processedIds });
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting messages:', err);
+    }
+  });
 };
